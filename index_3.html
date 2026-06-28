@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Two Views, One Distribution — Binomial &amp; Normal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#16161a; --panel:#1f1f25; --panel-2:#26262d; --line:#33333c;
+    --ink:#f1f1f4; --muted:#a3a3ad; --faint:#7c7c87;
+    --crimson:#c8102e; --crimson-soft:rgba(200,16,46,.16);
+    --teal:#2fb8a6; --gold:#e9b949; --amber:#e76f51;
+    --ok:#6cc28f;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"DM Sans",system-ui,sans-serif; line-height:1.55;
+    -webkit-font-smoothing:antialiased; padding:0 16px 48px;
+  }
+  .wrap{max-width:860px; margin:0 auto}
+  code,.mono{font-family:"DM Mono",ui-monospace,monospace}
+
+  /* Header */
+  header{padding:22px 0 14px; display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; justify-content:space-between}
+  .brand .eyebrow{font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--crimson); font-weight:700; margin:0 0 4px}
+  h1{font-size:1.5rem; line-height:1.2; margin:0; font-weight:700; letter-spacing:-.01em}
+  h1 .thin{color:var(--muted); font-weight:400}
+  .sub{color:var(--muted); font-size:.92rem; margin:6px 0 0; max-width:54ch}
+
+  /* Mode toggle */
+  .mode{display:flex; gap:0; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:3px}
+  .mode button{
+    font:inherit; font-size:.82rem; font-weight:500; color:var(--muted); background:none; border:0;
+    padding:7px 14px; border-radius:999px; cursor:pointer; white-space:nowrap;
+  }
+  .mode button[aria-pressed="true"]{background:var(--crimson); color:#fff}
+
+  /* Tabs */
+  nav.tabs{display:flex; gap:6px; flex-wrap:wrap; margin:18px 0 0; border-bottom:1px solid var(--line)}
+  nav.tabs button{
+    font:inherit; font-weight:500; font-size:.92rem; color:var(--muted); background:none; border:0;
+    padding:11px 4px; margin:0 14px -1px 0; cursor:pointer; border-bottom:2px solid transparent;
+  }
+  nav.tabs button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--crimson)}
+
+  section.tab{display:none; padding-top:22px}
+  section.tab.active{display:block; animation:fade .25s ease}
+  @keyframes fade{from{opacity:0; transform:translateY(4px)}to{opacity:1; transform:none}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+  /* Context selector */
+  .ctx{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px}
+  .ctx button{
+    font:inherit; text-align:left; color:var(--muted); background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; padding:12px 13px; cursor:pointer;
+  }
+  .ctx button .t{display:block; color:var(--ink); font-weight:700; font-size:.95rem}
+  .ctx button .s{display:block; font-size:.78rem; margin-top:2px}
+  .ctx button[aria-pressed="true"]{border-color:var(--crimson); background:linear-gradient(180deg,var(--crimson-soft),transparent)}
+  .ctx button.caution .t{color:var(--gold)}
+  .ctx button.caution[aria-pressed="true"]{border-color:var(--gold); background:linear-gradient(180deg,rgba(233,185,73,.14),transparent)}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:18px; margin-top:16px}
+  .scen{font-size:.96rem; margin:0}
+  .scen b{color:var(--ink)}
+  .check{display:inline-flex; align-items:center; gap:7px; margin-top:10px; font-size:.82rem; color:var(--ok); background:rgba(108,194,143,.1); border:1px solid rgba(108,194,143,.25); padding:4px 10px; border-radius:999px}
+  .check.warn{color:var(--gold); background:rgba(233,185,73,.1); border-color:rgba(233,185,73,.28)}
+
+  /* Controls row */
+  .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:16px 0 6px}
+  .seg{display:flex; background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:3px}
+  .seg button{font:inherit; font-size:.82rem; font-weight:500; color:var(--muted); background:none; border:0; padding:7px 12px; border-radius:8px; cursor:pointer}
+  .seg button[aria-pressed="true"]{color:var(--bg); font-weight:700}
+  .seg.axis button[aria-pressed="true"]{background:var(--teal)}
+  .seg.axis button[data-v="prop"][aria-pressed="true"]{background:var(--gold)}
+  .switch{display:inline-flex; align-items:center; gap:9px; font-size:.85rem; color:var(--muted); cursor:pointer; user-select:none}
+  .switch input{position:absolute; opacity:0; width:0; height:0}
+  .track{width:40px; height:23px; border-radius:999px; background:var(--panel-2); border:1px solid var(--line); position:relative; transition:background .15s}
+  .track::after{content:""; position:absolute; top:2px; left:2px; width:17px; height:17px; border-radius:50%; background:var(--faint); transition:transform .15s,background .15s}
+  .switch input:checked + .track{background:var(--crimson)}
+  .switch input:checked + .track::after{transform:translateX(17px); background:#fff}
+  .switch input:focus-visible + .track{outline:2px solid var(--gold); outline-offset:2px}
+
+  /* Chart */
+  .chartbox{margin-top:8px; background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px 12px 6px}
+  canvas{width:100%; height:auto; display:block; touch-action:manipulation}
+  .legend{display:flex; flex-wrap:wrap; gap:14px; font-size:.78rem; color:var(--muted); padding:8px 4px 2px}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .sw{width:12px; height:12px; border-radius:3px; display:inline-block}
+  .relabel{font-size:.82rem; color:var(--gold); background:rgba(233,185,73,.08); border-left:3px solid var(--gold); padding:9px 12px; border-radius:0 8px 8px 0; margin-top:12px}
+  .relabel.count{color:var(--teal); border-color:var(--teal); background:rgba(47,184,166,.08)}
+
+  /* Readout */
+  .predict{margin-top:16px; background:var(--panel-2); border:1px dashed var(--line); border-radius:12px; padding:16px; text-align:center}
+  .predict p{margin:0 0 12px; font-size:.92rem; color:var(--ink)}
+  .predict .pbtns{display:flex; gap:8px; justify-content:center; flex-wrap:wrap}
+  .predict .pbtns button{font:inherit; font-weight:500; font-size:.85rem; color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:9px 16px; cursor:pointer}
+  .predict .pbtns button:hover{border-color:var(--crimson)}
+
+  .readout{margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .rcard{background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:14px}
+  .rcard.exact{border-top:3px solid var(--teal)}
+  .rcard.normal{border-top:3px solid var(--gold)}
+  .rcard .lab{font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:700}
+  .rcard .q{font-size:.86rem; color:var(--muted); margin:6px 0 10px; min-height:2.4em}
+  .rcard .val{font-family:"DM Mono",monospace; font-size:1.7rem; font-weight:500; letter-spacing:-.01em}
+  .rcard.exact .val{color:var(--teal)}
+  .rcard.normal .val{color:var(--gold)}
+  .rcard .meta{font-size:.8rem; color:var(--muted); margin-top:6px; font-family:"DM Mono",monospace}
+  .gap{grid-column:1/-1; text-align:center; font-size:.86rem; color:var(--muted); background:var(--crimson-soft); border:1px solid rgba(200,16,46,.3); border-radius:10px; padding:10px}
+  .gap b{color:var(--ink)}
+
+  /* Teacher notes */
+  .tnote{margin-top:14px; border:1px solid rgba(200,16,46,.3); border-radius:12px; overflow:hidden}
+  .tnote .h{background:var(--crimson-soft); color:var(--crimson); font-weight:700; font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; padding:8px 14px}
+  .tnote .b{padding:13px 14px; font-size:.88rem; color:var(--muted)}
+  .tnote .b p{margin:0 0 9px} .tnote .b p:last-child{margin:0}
+  .tnote .b b{color:var(--ink)}
+  body[data-mode="student"] .teacher-only{display:none}
+
+  /* Explore */
+  .sliders{display:grid; gap:16px; margin-top:4px}
+  .srow label{display:flex; justify-content:space-between; font-size:.85rem; color:var(--muted); margin-bottom:7px}
+  .srow label b{color:var(--ink); font-family:"DM Mono",monospace}
+  input[type=range]{width:100%; -webkit-appearance:none; appearance:none; height:5px; border-radius:3px; background:var(--line); outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:var(--crimson); cursor:pointer; border:3px solid var(--panel)}
+  input[type=range]::-moz-range-thumb{width:20px; height:20px; border-radius:50%; background:var(--crimson); cursor:pointer; border:3px solid var(--panel)}
+  input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--gold); outline-offset:2px}
+
+  /* Why both */
+  .why{display:grid; gap:14px}
+  .wcard{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:18px}
+  .wcard .n{font-family:"DM Mono",monospace; color:var(--crimson); font-weight:500; font-size:.85rem}
+  .wcard h3{margin:4px 0 8px; font-size:1.05rem}
+  .wcard p{margin:0; color:var(--muted); font-size:.92rem}
+  .wcard p + p{margin-top:9px}
+  .infl{margin-top:14px; background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:14px}
+  .infl .row{display:flex; gap:16px; flex-wrap:wrap; margin-top:12px}
+  .infl .stat{flex:1; min-width:120px; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:11px 13px}
+  .infl .stat .k{font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; color:var(--faint); font-weight:700}
+  .infl .stat .v{font-family:"DM Mono",monospace; font-size:1.4rem; color:var(--gold); margin-top:2px}
+  .punch{margin-top:12px; font-size:.88rem; color:var(--ink); background:var(--crimson-soft); border-radius:10px; padding:11px 13px}
+
+  footer{margin-top:30px; padding-top:16px; border-top:1px solid var(--line); color:var(--faint); font-size:.78rem; text-align:center}
+  footer b{color:var(--muted); font-weight:500}
+
+  /* video overlay */
+  .vo{position:fixed; right:16px; bottom:16px; z-index:60}
+  .vo-pill{display:inline-flex; align-items:center; gap:8px; background:var(--crimson); color:#fff; border:0; border-radius:999px; padding:11px 16px; font:inherit; font-weight:700; font-size:.85rem; cursor:pointer; box-shadow:0 6px 22px rgba(0,0,0,.45)}
+  .vo-pill .ic{font-size:.72rem}
+  .vo.expanded .vo-pill{display:none}
+  .vo-body{width:340px; max-width:calc(100vw - 32px); background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 12px 34px rgba(0,0,0,.55)}
+  .vo-head{display:flex; align-items:center; justify-content:space-between; padding:9px 8px 9px 13px; background:var(--panel-2); border-bottom:1px solid var(--line)}
+  .vo-title{font-weight:700; font-size:.85rem}
+  .vo-min{background:none; border:0; color:var(--muted); font-size:1.4rem; line-height:1; cursor:pointer; padding:0 8px; border-radius:6px}
+  .vo-min:hover{color:var(--ink)}
+  .vo-frame{position:relative; aspect-ratio:16/9; background:#000}
+  .vo-frame iframe, .vo-frame video{position:absolute; inset:0; width:100%; height:100%; border:0; display:block}
+  .vo-ph{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center; padding:18px; color:var(--muted); font-size:.8rem; background:repeating-linear-gradient(45deg,#1b1b20,#1b1b20 10px,#202027 10px,#202027 20px)}
+  .vo-ph b{color:var(--ink); font-size:.9rem}
+  .vo-ph code{color:var(--gold)}
+
+  @media (max-width:560px){
+    h1{font-size:1.28rem}
+    .ctx{grid-template-columns:1fr}
+    .readout{grid-template-columns:1fr}
+    header{flex-direction:column; align-items:flex-start}
+  }
+</style>
+</head>
+<body data-mode="student">
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <p class="eyebrow">STAT C1000 · Sampling Distributions</p>
+      <h1>Two Views, <span class="thin">One Distribution</span></h1>
+      <p class="sub">The binomial count and the sample proportion aren't two distributions — they're the same bars on a relabeled axis. The normal curve is one smooth approximation laid over both.</p>
+    </div>
+    <div class="mode" role="group" aria-label="Mode">
+      <button id="mStudent" aria-pressed="true">Student</button>
+      <button id="mTeacher" aria-pressed="false">Teacher</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" aria-selected="true"  id="tab-ex"  aria-controls="panel-ex">The Examples</button>
+    <button role="tab" aria-selected="false" id="tab-xp"  aria-controls="panel-xp">Explore</button>
+    <button role="tab" aria-selected="false" id="tab-wy"  aria-controls="panel-wy">Why Both?</button>
+  </nav>
+
+  <!-- ===================== EXAMPLES ===================== -->
+  <section class="tab active" id="panel-ex" role="tabpanel" aria-labelledby="tab-ex">
+    <div class="ctx" role="group" aria-label="Choose a scenario">
+      <button data-ex="polling" aria-pressed="true"><span class="t">Polling</span><span class="s">n = 1000, p = 0.50</span></button>
+      <button data-ex="medical" aria-pressed="false"><span class="t">Medical trial</span><span class="s">n = 400, p = 0.20</span></button>
+      <button data-ex="mfg" aria-pressed="false"><span class="t">Manufacturing</span><span class="s">n = 180, p = 0.10</span></button>
+      <button data-ex="rare" class="caution" aria-pressed="false"><span class="t">⚠ Rare event</span><span class="s">n = 30, p = 0.05 · breaks</span></button>
+    </div>
+
+    <div class="card">
+      <p class="scen" id="scenText"></p>
+      <div id="scenCheck"></div>
+
+      <div class="controls">
+        <div class="seg axis" role="group" aria-label="X-axis">
+          <button data-v="count" aria-pressed="true">Counts (X)</button>
+          <button data-v="prop"  aria-pressed="false">Proportion (p̂)</button>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ccToggle" checked>
+          <span class="track" aria-hidden="true"></span>
+          Continuity correction
+        </label>
+      </div>
+
+      <div class="chartbox">
+        <canvas id="chartEx" role="img" aria-label="Binomial distribution chart"></canvas>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--teal)"></i> Exact binomial bars</span>
+          <span><i class="sw" style="background:var(--gold)"></i> Normal approximation</span>
+          <span><i class="sw" style="background:var(--crimson)"></i> The event we're asking about</span>
+        </div>
+      </div>
+      <div class="relabel count" id="relabelNote"></div>
+
+      <!-- student predict gate -->
+      <div class="predict student-only" id="predictBox">
+        <p id="predictPrompt"><b>Predict first.</b> With both conditions met and continuity correction on, how close will the normal approximation land to the exact binomial probability?</p>
+        <div class="pbtns">
+          <button data-p="close">Very close</button>
+          <button data-p="off">Noticeably off</button>
+        </div>
+      </div>
+
+      <div class="readout" id="readout" hidden></div>
+
+      <div class="tnote teacher-only">
+        <div class="h">Facilitation notes</div>
+        <div class="b" id="teacherNotes"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== EXPLORE ===================== -->
+  <section class="tab" id="panel-xp" role="tabpanel" aria-labelledby="tab-xp" hidden>
+    <div class="card">
+      <p class="scen"><b>Your sandbox.</b> Change <span class="mono">n</span>, the claimed <span class="mono">p</span>, and the cutoff. Watch the exact bars, the normal overlay, and the two probabilities respond together. The fixed examples stay clean; this is where you push on the idea.</p>
+
+      <div class="sliders">
+        <div class="srow">
+          <label for="sN">Sample size <b><span id="lblN">200</span></b></label>
+          <input type="range" id="sN" min="30" max="1500" step="10" value="200">
+        </div>
+        <div class="srow">
+          <label for="sP">Claimed proportion p <b><span id="lblP">0.30</span></b></label>
+          <input type="range" id="sP" min="5" max="95" step="1" value="30">
+        </div>
+        <div class="srow">
+          <label for="sK">Cutoff count <b><span id="lblK">50</span> &nbsp;(p̂ = <span id="lblKp">0.250</span>)</b></label>
+          <input type="range" id="sK" min="0" max="200" step="1" value="50">
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Direction">
+          <button id="dirGE" data-d="ge" aria-pressed="true">At least (≥)</button>
+          <button id="dirLE" data-d="le" aria-pressed="false">At most (≤)</button>
+        </div>
+        <div class="seg axis" role="group" aria-label="X-axis">
+          <button id="xpCount" data-v="count" aria-pressed="true">Counts</button>
+          <button id="xpProp"  data-v="prop"  aria-pressed="false">Proportion</button>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ccToggleXp" checked>
+          <span class="track" aria-hidden="true"></span>
+          Continuity correction
+        </label>
+      </div>
+
+      <div id="xpCheck"></div>
+
+      <div class="chartbox">
+        <canvas id="chartXp" role="img" aria-label="Explore distribution chart"></canvas>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--teal)"></i> Exact binomial</span>
+          <span><i class="sw" style="background:var(--gold)"></i> Normal</span>
+          <span><i class="sw" style="background:var(--crimson)"></i> Event</span>
+        </div>
+      </div>
+
+      <div class="readout" id="readoutXp"></div>
+    </div>
+  </section>
+
+  <!-- ===================== WHY BOTH ===================== -->
+  <section class="tab" id="panel-wy" role="tabpanel" aria-labelledby="tab-wy" hidden>
+    <div class="why">
+      <div class="wcard">
+        <span class="n">01</span>
+        <h3>From counts to inference</h3>
+        <p>A binomial calculator assumes you already know the true <span class="mono">p</span>. In real research you never do — you hold one sample proportion <span class="mono">p̂</span> and work backward. The normal model is what lets you turn that single sample into a confidence interval or a test about the unknown parameter.</p>
+      </div>
+      <div class="wcard">
+        <span class="n">02</span>
+        <h3>One universal ruler</h3>
+        <p>Voters, patients, defective chips — different units, different stories. The normal framework standardizes all of them into the same metric: the z-score. A z of +1.90 means the same thing in every field, which is exactly why it travels across science.</p>
+      </div>
+      <div class="wcard">
+        <span class="n">03</span>
+        <h3>The big-data trap</h3>
+        <p>Hold the sample result fixed at <span class="mono">p̂ = 0.53</span> against a claim of <span class="mono">0.50</span>. The gap never changes. Now slide the sample size and watch the z-score climb. This is statistical significance pulling away from practical importance.</p>
+
+        <div class="infl">
+          <div class="srow">
+            <label for="sInfl">Sample size n <b><span id="lblInfl">1,000</span></b></label>
+            <input type="range" id="sInfl" min="1000" max="100000" step="1000" value="1000">
+          </div>
+          <div class="row">
+            <div class="stat"><div class="k">Effect size</div><div class="v" id="inflEff">+0.03</div></div>
+            <div class="stat"><div class="k">z-score</div><div class="v" id="inflZ">1.90</div></div>
+            <div class="stat"><div class="k">p-value (one-sided)</div><div class="v" id="inflP">0.029</div></div>
+          </div>
+          <div class="punch" id="inflPunch"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tnote teacher-only" style="margin-top:16px">
+      <div class="h">Facilitation notes</div>
+      <div class="b">
+        <p><b>The move to make explicit:</b> the effect size readout never moves. Only n moves. Ask students what stayed the same and what changed before they look at the p-value.</p>
+        <p><b>Tie to media literacy:</b> "statistically significant" in a headline can mean a real-but-trivial effect measured on a huge sample. Significance answers "is it noise?" — not "does it matter?"</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <b>STAT C1000 · v1.3 · Built for Santa Ana College</b><br>
+    Plain-text math throughout · works embedded in Canvas
+  </footer>
+</div>
+
+<!-- Floating explainer video overlay (single video, collapsible) -->
+<div id="videoOverlay" class="vo collapsed" role="complementary" aria-label="Explainer video">
+  <button id="voToggle" class="vo-pill" aria-expanded="false" aria-controls="voBody">
+    <span class="ic" aria-hidden="true">▶</span> Watch Dr. Romero
+  </button>
+  <div id="voBody" class="vo-body" hidden>
+    <div class="vo-head">
+      <span class="vo-title" id="voTitle">Dr. Romero explains</span>
+      <button id="voMin" class="vo-min" aria-label="Minimize video">–</button>
+    </div>
+    <div class="vo-frame" id="voFrame"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   VIDEO OVERLAY — paste your explainer link below.
+   Works with YouTube, Vimeo, Canvas Studio embed URL, or an .mp4 path.
+   Leave it "" to show a placeholder. Use a CAPTIONED video (DOJ / WCAG).
+   ============================================================ */
+const VIDEO_URL = "";
+const VIDEO_TITLE = "Dr. Romero explains";
+
+/* ---------- math ---------- */
+function lgamma(x){
+  const g=7, c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,
+    771.32342877765313,-176.61502916214059,12.507343278686905,
+    -0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if(x<0.5) return Math.log(Math.PI/Math.sin(Math.PI*x))-lgamma(1-x);
+  x-=1; let a=c[0]; const t=x+g+0.5;
+  for(let i=1;i<g+2;i++) a+=c[i]/(x+i);
+  return 0.5*Math.log(2*Math.PI)+(x+0.5)*Math.log(t)-t+Math.log(a);
+}
+function logChoose(n,k){return lgamma(n+1)-lgamma(k+1)-lgamma(n-k+1);}
+function binomPmf(k,n,p){
+  if(k<0||k>n) return 0;
+  if(p<=0) return k===0?1:0;
+  if(p>=1) return k===n?1:0;
+  return Math.exp(logChoose(n,k)+k*Math.log(p)+(n-k)*Math.log(1-p));
+}
+function binomTail(k,n,p,dir){ // dir 'ge' => P(X>=k), 'le' => P(X<=k)
+  let s=0;
+  if(dir==='ge'){ for(let i=k;i<=n;i++) s+=binomPmf(i,n,p); }
+  else { for(let i=0;i<=k;i++) s+=binomPmf(i,n,p); }
+  return Math.min(1,s);
+}
+function erf(x){
+  const s=x>=0?1:-1; x=Math.abs(x);
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,pp=0.3275911;
+  const t=1/(1+pp*x);
+  const y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return s*y;
+}
+function Phi(z){return 0.5*(1+erf(z/Math.SQRT2));}
+function normalPdf(x,mu,sd){return Math.exp(-((x-mu)*(x-mu))/(2*sd*sd))/(sd*Math.sqrt(2*Math.PI));}
+
+/* normal approx of a binomial tail, on the proportion scale (z identical to count scale) */
+function normalApprox(k,n,p,dir,cc){
+  const sd=Math.sqrt(p*(1-p)/n);
+  let kc=k;
+  if(cc) kc = dir==='ge' ? k-0.5 : k+0.5;
+  const boundaryProp=kc/n;
+  const z=(boundaryProp-p)/sd;
+  const area = dir==='ge' ? 1-Phi(z) : Phi(z);
+  return {z, area, boundaryProp, kc, sd};
+}
+const fp = x => x.toFixed(4);
+const fpct = x => (x*100).toFixed(2)+'%';
+
+/* ---------- scenarios ---------- */
+const EX = {
+  polling:{
+    n:1000,p:0.50,k:530,dir:'ge',
+    scen:`A pollster surveys <b>n = 1000</b> voters to test whether a candidate's true support is <b>p = 0.50</b>. The sample came back with <b>530 supporters</b> — that's <b>p̂ = 0.530</b>.`,
+    qCount:`P(X ≥ 530 voters support)`,
+    qProp:`P(p̂ ≥ 0.530)`,
+    notes:`<p><b>Matched events on purpose.</b> Both panels ask the same tail — at least 530 voters / a proportion of at least 0.53. That's what lets the exact and approximate numbers be compared head-to-head.</p>
+           <p><b>Likely misconception:</b> "the binomial and the normal are different distributions." Toggle the axis live — the bars never move. We only relabel each count k as the proportion k/n.</p>
+           <p><b>Discuss:</b> ask why the boundary line jumps half a bar left when continuity correction turns on, before you explain it.</p>`
+  },
+  medical:{
+    n:400,p:0.20,k:95,dir:'le',
+    scen:`A treatment is tested on <b>n = 400</b> patients. The historical recovery rate is <b>p = 0.20</b>. We ask about the chance of seeing <b>at most 95 recoveries</b> — a rate of <b>p̂ = 0.2375</b> or lower.`,
+    qCount:`P(X ≤ 95 recover)`,
+    qProp:`P(p̂ ≤ 0.2375)`,
+    notes:`<p><b>Direction flips here</b> — it's a left tail (at most). Good moment to check that students can read which side of the cutoff is shaded.</p>
+           <p><b>Continuity correction</b> pushes the boundary to 95.5 (a rate of 0.23875), nudging the normal estimate up toward the exact value. Have them confirm which direction "+0.5" goes for a ≤ event.</p>`
+  },
+  mfg:{
+    n:180,p:0.10,k:11,dir:'le',
+    scen:`A factory's chips have a defect rate of <b>p = 0.10</b>. In a batch of <b>n = 180</b>, we ask about <b>fewer than 12 defects</b> — that is, <b>at most 11</b>, a rate of <b>p̂ ≈ 0.0611</b>.`,
+    qCount:`P(X ≤ 11 defective)`,
+    qProp:`P(p̂ ≤ 0.0611)`,
+    notes:`<p><b>"Fewer than 12" = at most 11.</b> This is where the count-to-proportion translation bites: 11/180 ≈ 0.0611, not 12/180. Surface that boundary carefully — it's the most common slip in this whole topic.</p>
+           <p><b>Smallest n, most skew (p = 0.10).</b> Watch carefully: turning continuity correction on actually <b>overshoots</b> the exact value a little here. CC fixes the discreteness gap, but it can't fix skew — and a right-skewed binomial breaks the normal curve's symmetry. The honest takeaway: when n is small and p is far from 0.5, trust the exact binomial; the normal is an approximation, not the truth.</p>`
+  },
+  rare:{
+    n:30,p:0.05,k:4,dir:'ge',fail:true,
+    scen:`A clinic gives a vaccine to <b>n = 30</b> patients. A rare reaction occurs in about <b>p = 0.05</b> of people. We ask: what's the chance that <b>at least 4</b> of these patients react? Here <b>np = 1.5</b> — the success/failure condition fails.`,
+    qCount:`P(X ≥ 4 react)`,
+    qProp:`P(p̂ ≥ 0.133)`,
+    notes:`<p><b>This is the case that earns the binomial its place.</b> np = 1.5 is far below 10, so the normal model isn't just imprecise — it's wrong in kind.</p>
+           <p><b>The visible tell:</b> the gold curve slides left of zero. The normal model assigns about <b>10%</b> of its probability to <b>fewer than zero reactions</b>, which can't happen. When a model predicts the impossible, stop using it.</p>
+           <p><b>Why:</b> the normal is symmetric; a rare-event binomial is heavily right-skewed and bunched against 0. No amount of continuity correction fixes a shape mismatch. The exact binomial is the only trustworthy answer here — a clean argument for why your phone's binomial calculator still matters.</p>
+           <p><b>Predict-first payoff:</b> in Student mode the honest prediction flips to "noticeably off" for the first time. Worth pausing on that contrast with the other three.</p>`
+  }
+};
+
+let state = {ex:'polling', axis:'count', cc:true, revealed:false};
+
+/* ---------- canvas chart ---------- */
+function drawChart(canvas,{n,p,k,dir,cc,axis,fail}){
+  const dpr=window.devicePixelRatio||1;
+  const cssW=canvas.clientWidth||canvas.parentElement.clientWidth-24;
+  const cssH=Math.max(220,Math.min(300,cssW*0.46));
+  canvas.width=cssW*dpr; canvas.height=cssH*dpr;
+  const ctx=canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const mu=n*p, sd=Math.sqrt(n*p*(1-p));
+  let lo,hi;
+  if(fail){ lo=Math.floor(mu-3.2*sd); } else { lo=Math.max(0,Math.floor(mu-4.5*sd)); }
+  hi=Math.min(n,Math.ceil(mu+4.5*sd));
+  lo=Math.min(lo,k-2); hi=Math.max(hi,k+2);
+  if(!fail) lo=Math.max(0,lo);
+  hi=Math.min(n,hi);
+  const span=hi-lo;
+
+  const padL=8,padR=8,padT=12,padB=30;
+  const W=cssW-padL-padR, H=cssH-padT-padB;
+  const x = v => padL + ((v-lo)/span)*W;            // v in count units
+  let maxP=0; for(let i=lo;i<=hi;i++) maxP=Math.max(maxP,binomPmf(i,n,p));
+  const peakNorm=normalPdf(mu,mu,sd);
+  const yMax=Math.max(maxP,peakNorm)*1.12;
+  const y = d => padT + H - (d/yMax)*H;
+
+  const barW=W/span;
+  const ccBoundary = cc ? (dir==='ge'?k-0.5:k+0.5) : k;
+
+  // bars
+  for(let i=Math.max(0,lo);i<=hi;i++){
+    const inTail = dir==='ge' ? i>=k : i<=k;
+    const bp=binomPmf(i,n,p);
+    const bx=x(i)-barW/2+0.5, by=y(bp), bh=padT+H-by;
+    ctx.fillStyle = inTail ? 'rgba(200,16,46,.78)' : 'rgba(47,184,166,.62)';
+    ctx.fillRect(bx,by,Math.max(0.8,barW-1),bh);
+  }
+  // impossible region (only when the normal spills below zero) — NEUTRAL gray, never the event color
+  if(lo<0){
+    const xl=x(lo), x0=x(0);
+    ctx.fillStyle='rgba(124,124,135,.14)';
+    ctx.fillRect(xl,padT,x0-xl,H);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(xl,padT,x0-xl,H); ctx.clip();
+    ctx.strokeStyle='rgba(124,124,135,.32)'; ctx.lineWidth=1;
+    for(let xx=xl-H; xx<x0; xx+=9){ ctx.beginPath(); ctx.moveTo(xx,padT+H); ctx.lineTo(xx+H,padT); ctx.stroke(); }
+    ctx.restore();
+    ctx.setLineDash([4,3]); ctx.strokeStyle='rgba(241,241,244,.55)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x0,padT); ctx.lineTo(x0,padT+H); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#9a9aa3'; ctx.font='10px "DM Sans",sans-serif'; ctx.textAlign='left';
+    ctx.fillText('impossible zone: X < 0', xl+5, padT+12);
+  }
+  // normal curve
+  ctx.beginPath();
+  for(let px=0;px<=W;px++){
+    const v=lo+(px/W)*span;
+    const d=normalPdf(v,mu,sd);
+    const yy=y(d);
+    px===0?ctx.moveTo(padL+px,yy):ctx.lineTo(padL+px,yy);
+  }
+  ctx.strokeStyle='#e9b949'; ctx.lineWidth=2.4; ctx.stroke();
+
+  // boundary line
+  const bxLine=x(ccBoundary);
+  ctx.setLineDash([5,4]); ctx.strokeStyle='#c8102e'; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.moveTo(bxLine,padT-2); ctx.lineTo(bxLine,padT+H); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // axis ticks
+  ctx.fillStyle='#a3a3ad'; ctx.font='11px "DM Mono",monospace'; ctx.textAlign='center';
+  const nTicks=5;
+  for(let t=0;t<=nTicks;t++){
+    const v=lo+(span*t/nTicks);
+    let lab = axis==='count' ? Math.round(v).toString() : (v/n).toFixed(2);
+    ctx.fillText(lab, x(v), cssH-10);
+  }
+  // axis label
+  ctx.fillStyle='#7c7c87'; ctx.textAlign='right';
+  ctx.fillText(axis==='count'?'count X':'proportion p̂', cssW-padR, cssH-1);
+
+  canvas.setAttribute('aria-label',
+    `Binomial distribution, n=${n}, p=${p}. Bars show exact probabilities; gold curve is the normal approximation. Shaded region marks ${dir==='ge'?'X at least':'X at most'} ${k}. X-axis shown as ${axis==='count'?'counts':'proportions'}.`);
+}
+
+/* ---------- render examples ---------- */
+function renderEx(){
+  const e=EX[state.ex];
+  document.getElementById('scenText').innerHTML=e.scen;
+
+  // condition check
+  const np=e.n*e.p, nq=e.n*(1-e.p), npOk=np>=10, nqOk=nq>=10, ok=npOk&&nqOk;
+  document.getElementById('scenCheck').innerHTML =
+    `<span class="check ${ok?'':'warn'}">${ok?'✓':'⚠'} np = ${np} ${npOk?'≥':'<'} 10 · n(1−p) = ${nq} ${nqOk?'≥':'<'} 10 · ${ok?'both met — normal model valid':'condition not met — use the exact binomial'}</span>`;
+
+  drawChart(document.getElementById('chartEx'),{n:e.n,p:e.p,k:e.k,dir:e.dir,cc:state.cc,axis:state.axis,fail:!!e.fail});
+
+  const note=document.getElementById('relabelNote');
+  if(state.axis==='count'){
+    note.className='relabel count';
+    note.innerHTML=`<b>Counting view.</b> The x-axis is the number of "successes," X, from 0 to ${e.n}. Each bar is the exact chance of that count.`;
+  }else{
+    note.className='relabel';
+    note.innerHTML=`<b>Same bars — relabeled.</b> Every count k just became the proportion k / ${e.n}. Nothing about the distribution moved; we divided the axis by n.`;
+  }
+
+  document.getElementById('teacherNotes').innerHTML=e.notes;
+  renderReadout();
+}
+
+function renderReadout(){
+  const e=EX[state.ex];
+  const box=document.getElementById('readout');
+  const isTeacher=document.body.dataset.mode==='teacher';
+  const gate=document.getElementById('predictBox');
+
+  const np=e.n*e.p, nq=e.n*(1-e.p), condOk=np>=10&&nq>=10;
+  const prompt=document.getElementById('predictPrompt');
+  if(prompt){
+    prompt.innerHTML = condOk
+      ? `<b>Predict first.</b> Both conditions are met and continuity correction is on. How close will the normal approximation land to the exact binomial probability?`
+      : `<b>Predict first.</b> Heads up — here the success/failure condition <b>fails</b> (np = ${np} &lt; 10). How close do you think the normal approximation will land to the exact answer?`;
+  }
+
+  if(!isTeacher && !state.revealed){ box.hidden=true; gate.style.display='block'; return; }
+  gate.style.display='none'; box.hidden=false;
+
+  const exact=binomTail(e.k,e.n,e.p,e.dir);
+  const na=normalApprox(e.k,e.n,e.p,e.dir,state.cc);
+  const q = state.axis==='count' ? e.qCount : e.qProp;
+  const diff=Math.abs(exact-na.area);
+
+  let gapMsg;
+  if(!condOk){
+    const imp=Phi((0-np)/Math.sqrt(np*(1-e.p)));
+    gapMsg=`<b>Don\u2019t trust the normal here.</b> np = ${np} is below 10, the shape is skewed, and the curve places ${fpct(imp)} of its probability below zero \u2014 an impossible count. Report the exact binomial, <b>${fp(exact)}</b>. This is the case that justifies learning the binomial in the first place.`;
+  } else if(diff<0.01){
+    gapMsg=`Gap between the two: <b>${fp(diff)}</b> (${fpct(diff)}). Conditions hold and the correction is on \u2014 the smooth curve all but lands on the exact answer.`;
+  } else {
+    gapMsg=`Gap between the two: <b>${fp(diff)}</b> (${fpct(diff)}). The approximation is in the neighborhood; continuity correction tightens it.`;
+  }
+  const normLab = condOk ? `Normal approx${state.cc?' \u00b7 CC on':''}` : `Normal approx \u00b7 \u26a0 invalid`;
+  const normMeta = condOk ? `z = ${na.z.toFixed(2)}` : `z = ${na.z.toFixed(2)} \u00b7 do not report`;
+
+  box.innerHTML=`
+    <div class="rcard exact">
+      <div class="lab">Exact binomial</div>
+      <div class="q">${q}</div>
+      <div class="val">${fp(exact)}</div>
+      <div class="meta">summed over every bar</div>
+    </div>
+    <div class="rcard normal"${condOk?'':' style="opacity:.55"'}>
+      <div class="lab">${normLab}</div>
+      <div class="q">z = (${na.boundaryProp.toFixed(4)} \u2212 ${e.p}) / ${na.sd.toFixed(4)}</div>
+      <div class="val">${fp(na.area)}</div>
+      <div class="meta">${normMeta}</div>
+    </div>
+    <div class="gap">${gapMsg}</div>
+  `;
+}
+
+/* ---------- explore ---------- */
+let xp={n:200,p:0.30,k:50,dir:'ge',axis:'count',cc:true};
+function renderXp(){
+  document.getElementById('lblN').textContent=xp.n;
+  document.getElementById('lblP').textContent=xp.p.toFixed(2);
+  document.getElementById('sK').max=xp.n;
+  if(xp.k>xp.n) xp.k=xp.n;
+  document.getElementById('lblK').textContent=xp.k;
+  document.getElementById('lblKp').textContent=(xp.k/xp.n).toFixed(3);
+
+  const np=xp.n*xp.p, nq=xp.n*(1-xp.p), npOk=np>=10, nqOk=nq>=10, ok=npOk&&nqOk;
+  document.getElementById('xpCheck').innerHTML=
+    `<span class="check ${ok?'':'warn'}">${ok?'✓':'⚠'} np = ${np.toFixed(1)} ${npOk?'≥':'<'} 10 · n(1−p) = ${nq.toFixed(1)} ${nqOk?'≥':'<'} 10 · ${ok?'both met — normal model valid':'condition not met — normal model not reliable'}</span>`;
+
+  const xpFail = (xp.n*xp.p<10)||(xp.n*(1-xp.p)<10);
+  drawChart(document.getElementById('chartXp'),{n:xp.n,p:xp.p,k:xp.k,dir:xp.dir,cc:xp.cc,axis:xp.axis,fail:xpFail});
+
+  const exact=binomTail(xp.k,xp.n,xp.p,xp.dir);
+  const na=normalApprox(xp.k,xp.n,xp.p,xp.dir,xp.cc);
+  const sym=xp.dir==='ge'?'≥':'≤';
+  const q = xp.axis==='count' ? `P(X ${sym} ${xp.k})` : `P(p̂ ${sym} ${(xp.k/xp.n).toFixed(3)})`;
+  const diff=Math.abs(exact-na.area);
+  document.getElementById('readoutXp').innerHTML=`
+    <div class="rcard exact"><div class="lab">Exact binomial</div><div class="q">${q}</div><div class="val">${fp(exact)}</div><div class="meta">summed bars</div></div>
+    <div class="rcard normal"><div class="lab">Normal${xp.cc?' · CC':''}</div><div class="q">z = ${na.z.toFixed(2)}</div><div class="val">${fp(na.area)}</div><div class="meta">SE = ${na.sd.toFixed(4)}</div></div>
+    <div class="gap">Gap: <b>${fp(diff)}</b>${!ok?' — conditions are not met, so expect daylight here.':''}</div>`;
+}
+
+/* ---------- inflation demo ---------- */
+function renderInfl(){
+  const n=+document.getElementById('sInfl').value;
+  const phat=0.53, p0=0.50, eff=phat-p0;
+  const se=Math.sqrt(p0*(1-p0)/n);
+  const z=eff/se, pv=1-Phi(z);
+  document.getElementById('lblInfl').textContent=n.toLocaleString();
+  document.getElementById('inflEff').textContent='+'+eff.toFixed(2);
+  document.getElementById('inflZ').textContent=z.toFixed(2);
+  document.getElementById('inflP').textContent=pv<0.0001?'<0.0001':pv.toFixed(4);
+  document.getElementById('inflPunch').innerHTML=
+    `Same 3-point gap. At n = ${n.toLocaleString()}, z = <b>${z.toFixed(2)}</b> and p ${pv<0.0001?'< 0.0001':'= '+pv.toFixed(4)}. The effect never grew — only the sample did. z scales with √n.`;
+}
+
+/* ---------- wiring ---------- */
+function setMode(m){
+  document.body.dataset.mode=m;
+  document.getElementById('mStudent').setAttribute('aria-pressed', m==='student');
+  document.getElementById('mTeacher').setAttribute('aria-pressed', m==='teacher');
+  if(m==='teacher') state.revealed=true;        // teacher sees everything
+  else state.revealed=false;                      // re-gate for student
+  renderReadout();
+}
+document.getElementById('mStudent').onclick=()=>setMode('student');
+document.getElementById('mTeacher').onclick=()=>setMode('teacher');
+
+// tabs
+const tabs=[['tab-ex','panel-ex'],['tab-xp','panel-xp'],['tab-wy','panel-wy']];
+tabs.forEach(([t,pn])=>{
+  document.getElementById(t).onclick=()=>{
+    tabs.forEach(([tt,pp])=>{
+      const sel=tt===t;
+      document.getElementById(tt).setAttribute('aria-selected',sel);
+      const panel=document.getElementById(pp);
+      panel.classList.toggle('active',sel); panel.hidden=!sel;
+    });
+    if(t==='tab-xp') renderXp();
+    if(t==='tab-wy') renderInfl();
+    if(t==='tab-ex') renderEx();
+  };
+});
+
+// example context buttons
+document.querySelectorAll('.ctx button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('.ctx button').forEach(x=>x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+    state.ex=b.dataset.ex;
+    if(document.body.dataset.mode==='student') state.revealed=false;
+    renderEx();
+  };
+});
+
+// axis seg (examples)
+document.querySelectorAll('#panel-ex .seg.axis button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#panel-ex .seg.axis button').forEach(x=>x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true'); state.axis=b.dataset.v; renderEx();
+  };
+});
+document.getElementById('ccToggle').onchange=e=>{state.cc=e.target.checked; renderEx();};
+
+// predict buttons
+document.querySelectorAll('#predictBox .pbtns button').forEach(b=>{
+  b.onclick=()=>{state.revealed=true; renderReadout();};
+});
+
+// explore controls
+document.getElementById('sN').oninput=e=>{xp.n=+e.target.value; renderXp();};
+document.getElementById('sP').oninput=e=>{xp.p=+e.target.value/100; renderXp();};
+document.getElementById('sK').oninput=e=>{xp.k=+e.target.value; renderXp();};
+document.getElementById('dirGE').onclick=()=>{xp.dir='ge';document.getElementById('dirGE').setAttribute('aria-pressed','true');document.getElementById('dirLE').setAttribute('aria-pressed','false');renderXp();};
+document.getElementById('dirLE').onclick=()=>{xp.dir='le';document.getElementById('dirLE').setAttribute('aria-pressed','true');document.getElementById('dirGE').setAttribute('aria-pressed','false');renderXp();};
+document.getElementById('xpCount').onclick=()=>{xp.axis='count';document.getElementById('xpCount').setAttribute('aria-pressed','true');document.getElementById('xpProp').setAttribute('aria-pressed','false');renderXp();};
+document.getElementById('xpProp').onclick=()=>{xp.axis='prop';document.getElementById('xpProp').setAttribute('aria-pressed','true');document.getElementById('xpCount').setAttribute('aria-pressed','false');renderXp();};
+document.getElementById('ccToggleXp').onchange=e=>{xp.cc=e.target.checked; renderXp();};
+
+// inflation
+document.getElementById('sInfl').oninput=renderInfl;
+
+// resize redraw
+let rt; window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{
+  if(document.getElementById('panel-ex').classList.contains('active')) renderEx();
+  if(document.getElementById('panel-xp').classList.contains('active')) renderXp();
+},150);});
+
+// video overlay
+function normalizeVideo(u){
+  if(!u) return null;
+  u=u.trim(); let m;
+  if(/\.mp4($|\?)/i.test(u)) return {type:'mp4',src:u};
+  if(m=u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/)) return {type:'iframe',src:'https://www.youtube.com/embed/'+m[1]};
+  if(m=u.match(/vimeo\.com\/(?:video\/)?(\d+)/)) return {type:'iframe',src:'https://player.vimeo.com/video/'+m[1]};
+  return {type:'iframe',src:u}; // Canvas Studio or any other embed src, used as-is
+}
+let voMounted=false;
+function mountVideo(){
+  const frame=document.getElementById('voFrame');
+  document.getElementById('voTitle').textContent=VIDEO_TITLE;
+  const v=normalizeVideo(VIDEO_URL);
+  if(!v){
+    frame.innerHTML='<div class="vo-ph"><b>Video goes here</b><span>Paste a captioned embed link into <code>VIDEO_URL</code> at the top of the script.</span></div>';
+    return;
+  }
+  frame.innerHTML = v.type==='mp4'
+    ? '<video controls preload="metadata" src="'+v.src+'"></video>'
+    : '<iframe src="'+v.src+'" title="'+VIDEO_TITLE+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+}
+(function(){
+  const vo=document.getElementById('videoOverlay');
+  const toggle=document.getElementById('voToggle');
+  const body=document.getElementById('voBody');
+  const min=document.getElementById('voMin');
+  function open(){ if(!voMounted){mountVideo(); voMounted=true;} vo.classList.add('expanded'); vo.classList.remove('collapsed'); body.hidden=false; toggle.setAttribute('aria-expanded','true'); }
+  function close(){ vo.classList.remove('expanded'); vo.classList.add('collapsed'); body.hidden=true; toggle.setAttribute('aria-expanded','false'); toggle.focus(); }
+  toggle.onclick=open; min.onclick=close;
+})();
+
+// init
+renderEx();
+</script>
+</body>
+</html>
